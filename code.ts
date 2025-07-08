@@ -1,166 +1,74 @@
-// Stack layers with offset and correct order handling
+// code.ts
 
-const X_OFFSET = 100;
-const Y_OFFSET = 100;
-const FIRST_ON_TOP = true; // Set to false to reverse stacking order
+// Ensure the plugin closes when the user cancels the plugin
+figma.on('close', () => {
+  figma.closePlugin();
+});
 
-function isSceneNode(node: SceneNode): boolean {
-  return typeof node.x === 'number' && typeof node.y === 'number';
+// Define the offset values (you can modify these or retrieve them from the UI)
+const offsetX = 8;
+const offsetY = 8;
+
+// Function to determine if a node is a SceneNode
+function isSceneNode(node: BaseNode): node is SceneNode {
+  return 'visible' in node;
 }
 
-function getLayerIndex(layer: SceneNode): number {
-  let depth = 0;
-  let current: BaseNode | null = layer;
-  while (current.parent && current.parent.type !== 'PAGE') {
-    current = current.parent;
-    depth++;
+// Function to get the absolute index of a node in the layer hierarchy
+function getNodePath(node: SceneNode): number[] {
+  const path: number[] = [];
+  let current: BaseNode | null = node;
+
+  while (current && current.parent) {
+    const parent = current.parent as BaseNode & ChildrenMixin;
+    if ("children" in parent) {
+      const idx = (parent.children as readonly BaseNode[]).indexOf(current);
+      path.unshift(idx);
+    }
+    current = parent;
   }
-  return depth;
+  return path;
 }
 
-function getTopLayerByHierarchy(layers: readonly SceneNode[]): SceneNode {
-  // Find the layer that appears highest in the layers panel
-  let topLayer = layers[0];
-  
-  for (const layer of layers) {
-    if (isLayerHigherInPanel(layer, topLayer)) {
-      topLayer = layer;
+// Function to compare two nodes based on their position in the layer hierarchy
+function compareLayerOrder(a: SceneNode, b: SceneNode): number {
+  const aIndex = getAbsoluteIndex(a);
+  const bIndex = getAbsoluteIndex(b);
+
+  for (let i = 0; i < Math.min(aIndex.length, bIndex.length); i++) {
+    if (aIndex[i] !== bIndex[i]) {
+      return aIndex[i] - bIndex[i];
     }
   }
-  
-  return topLayer;
+
+  return aIndex.length - bIndex.length;
 }
 
-function isLayerHigherInPanel(layerA: SceneNode, layerB: SceneNode): boolean {
-  // If they have the same parent, compare their indices directly
-  if (layerA.parent === layerB.parent && layerA.parent && 'children' in layerA.parent) {
-    const parent = layerA.parent;
-    const aIndex = parent.children.indexOf(layerA);
-    const bIndex = parent.children.indexOf(layerB);
-    return aIndex < bIndex; // Lower index = higher in panel
-  }
-  
-  // For different parents, we need to find their common ancestor
-  // and compare from there. For now, let's use a simple heuristic:
-  // prefer layers that are less deeply nested (closer to page level)
-  function getDepth(node: SceneNode): number {
-    let depth = 0;
-    let current: BaseNode | null = node;
-    while (current.parent && current.parent.type !== 'PAGE') {
-      current = current.parent;
-      depth++;
-    }
-    return depth;
-  }
-  
-  const depthA = getDepth(layerA);
-  const depthB = getDepth(layerB);
-  
-  if (depthA !== depthB) {
-    return depthA < depthB; // Less nested = higher in panel
-  }
-  
-  // If same depth, compare their root parents' positions
-  function getRootParent(node: SceneNode): BaseNode {
-    let current: BaseNode = node;
-    while (current.parent && current.parent.type !== 'PAGE') {
-      current = current.parent;
-    }
-    return current;
-  }
-  
-  const rootA = getRootParent(layerA);
-  const rootB = getRootParent(layerB);
-  
-  if (rootA.parent && rootB.parent && 'children' in rootA.parent && 'children' in rootB.parent) {
-    const rootAIndex = rootA.parent.children.indexOf(rootA);
-    const rootBIndex = rootB.parent.children.indexOf(rootB);
-    return rootAIndex < rootBIndex;
-  }
-  
-  return false;
-}
+// Main plugin logic
+function offsetStack() {
+  const selection = figma.currentPage.selection.filter(isSceneNode);
 
-function moveLayersToCommonFrame(layers: readonly SceneNode[], targetFrame: FrameNode | PageNode) {
-  for (const node of layers) {
-    try {
-      if (node.parent && node.parent !== targetFrame && 'appendChild' in targetFrame) {
-        targetFrame.appendChild(node);
-      }
-    } catch (e) {
-      console.error(`Failed to move ${'name' in node ? node.name : 'unknown'}:`, e);
-    }
-  }
-}
-
-function stackLayers(
-  layers: SceneNode[],
-  xOffset: number,
-  yOffset: number,
-  firstOnTop: boolean
-) {
-  if (layers.length < 2) {
-    figma.notify("Select at least 2 layers to apply stagger.");
+  if (selection.length === 0) {
+    figma.notify('Please select at least one layer.');
     return;
   }
 
-  // Detect autolayout conflicts
-  const hasAutoLayout = layers.some(
-    (node) =>
-      node.parent &&
-      node.parent.type === "FRAME" &&
-      node.parent.layoutMode !== "NONE"
-  );
+  // Sort the selection based on their position in the layer hierarchy
+  const sortedSelection = selection.slice().sort(compareLayerOrder);
 
-  if (hasAutoLayout) {
-    figma.notify("Warning: Some layers are inside Auto Layout frames and may behave unexpectedly.");
-  }
+  // Determine the topmost layer (the one closest to the top of the layers panel)
+  const topLayer = sortedSelection[0];
+  const baseX = topLayer.x;
+  const baseY = topLayer.y;
 
-  // Get the base position from the topmost layer in hierarchy
-  const hierarchyBase = getTopLayerByHierarchy(layers);
-  console.log("Using base layer:", hierarchyBase.name);
-  const baseX = hierarchyBase.x;
-  const baseY = hierarchyBase.y;
-
-  // Move all layers into shared parent first
-  const parent = hierarchyBase.parent;
-  if (parent && (parent.type === "FRAME" || parent.type === "PAGE")) {
-    moveLayersToCommonFrame(layers, parent);
-  }
-
-  // Sort all layers by their hierarchy position for consistent ordering
-  const layersSortedByHierarchy = [...layers].sort((a, b) => {
-    return isLayerHigherInPanel(a, b) ? -1 : 1;
+  // Offset each layer based on its position in the sorted selection
+  sortedSelection.forEach((node, index) => {
+    node.x = baseX + offsetX * index;
+    node.y = baseY + offsetY * index;
   });
 
-  console.log("Layers sorted by hierarchy:", layersSortedByHierarchy.map(l => l.name));
-
-  // Determine the visual stacking order
-  // layersSortedByHierarchy[0] should be the visual top card
-  const ordered = firstOnTop ? layersSortedByHierarchy : [...layersSortedByHierarchy].reverse();
-
-  console.log("Final ordered array:", ordered.map(l => l.name));
-  console.log("Visual top card should be:", ordered[0].name);
-
-  // Position layers in stack formation - visual top card at base position
-  ordered.forEach((node, index) => {
-    if (isSceneNode(node)) {
-      node.x = baseX + xOffset * index;
-      node.y = baseY + yOffset * index;
-    }
-  });
-
-  // Reorder layers so the visual top card is actually on top in the layers panel
-  if (parent && 'insertChild' in parent) {
-    ordered.forEach((node, i) => {
-      // Visual top card (index 0) should be at the top of the layers panel
-      parent.insertChild(i, node);
-    });
-  }
+  figma.notify('Layers have been offset and stacked.');
 }
 
-// ---- Plugin Entry ----
-
-const selection = figma.currentPage.selection.slice();
-stackLayers(selection, X_OFFSET, Y_OFFSET, FIRST_ON_TOP);
-figma.closePlugin();
+// Run the plugin
+offsetStack();
