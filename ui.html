@@ -23,12 +23,21 @@
     }
 
     /* UI Structure */
+    html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        width: 240px;
+        height: 156px;
+    }
+
     .ui-body {
-      display: flex;
-      width: 240px;
-      flex-direction: column;
-      align-items: flex-start;
-      background: var(--figma-color-bg);
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        background: var(--figma-color-bg);
     }
 
     .inputs-wrapper {
@@ -101,6 +110,8 @@
 
     .input-field input {
       display: flex;
+      width: 100%;
+      min-width: 0;
       height: 24px;
       flex: 1 0 0;
       border: none;
@@ -123,8 +134,10 @@
       margin: 0;
     }
     input[type="number"] {
-      -moz-appearance: textfield;
+        appearance: textfield;
+        -moz-appearance: textfield;
     }
+
 
     /* Segmented control */
     .segmented-control {
@@ -189,11 +202,6 @@
       z-index: 1;
     }
 
-    /* Focus states for segmented control */
-    .segmented-tab input:focus ~ .tab-bg {
-      border: 1px solid var(--figma-color-bg-brand);
-    }
-
     /* Buttons */
     .button {
       display: flex;
@@ -219,9 +227,9 @@
       background: var(--figma-color-bg-brand-pressed);
     }
 
-    .button-primary:focus {
-      outline: 1px solid var(--figma-color-bg-brand);
-      outline-offset: 1px;
+    .button:focus {
+        outline: none;
+        box-shadow: 0 0 0 1px var(--figma-color-border-selected);
     }
 
     .button-secondary {
@@ -235,30 +243,27 @@
     }
 
     .button-secondary:focus {
-      border-color: var(--figma-color-bg-brand);
+        box-shadow: 0 0 0 1px var(--figma-color-border-selected);
+        border-color: var(--figma-color-border-selected);
     }
   </style>
 </head>
 <body>
   <div class="ui-body">
     <div class="inputs-wrapper">
-      <div class="input-row label-only">
-        <label>Offset Amount</label>
-      </div>
-      
       <div class="input-row">
-        <label>X</label>
+        <label>Offset amount</label>
         <div class="input-field">
           <span class="input-prefix">X</span>
-          <input type="number" id="x-offset" value="50" placeholder="0">
+          <input type="number" id="x-offset" placeholder="0">
         </div>
       </div>
       
       <div class="input-row">
-        <label>Y</label>
+        <label></label>
         <div class="input-field">
           <span class="input-prefix">Y</span>
-          <input type="number" id="y-offset" value="50" placeholder="0">
+          <input type="number" id="y-offset" placeholder="0">
         </div>
       </div>
       
@@ -266,7 +271,7 @@
         <label>Canvas Stacking</label>
         <div class="segmented-control">
           <div class="segmented-tab">
-            <input type="radio" id="primary-top" name="stack-mode" value="primary-on-top" checked>
+            <input type="radio" id="primary-top" name="stack-mode" value="primary-on-top" tabindex="-1" checked>
             <div class="tab-bg"></div>
             <label for="primary-top">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -277,7 +282,7 @@
           </div>
           
           <div class="segmented-tab">
-            <input type="radio" id="primary-bottom" name="stack-mode" value="primary-on-bottom">
+            <input type="radio" id="primary-bottom" name="stack-mode" value="primary-on-bottom" tabindex="-1">
             <div class="tab-bg"></div>
             <label for="primary-bottom">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

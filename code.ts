@@ -5,23 +5,21 @@
 // Note: __html__ should be defined in your ui.html file
 figma.showUI(__html__, { 
   width: 240, 
-  height: 156,
+  height: 168,
   themeColors: true // Enable automatic theme support
 });
 
 // Default values
-let X_OFFSET = 50;
-let Y_OFFSET = 50;
 let STACK_MODE: 'primary-on-top' | 'primary-on-bottom' = 'primary-on-top';
 
 figma.ui.onmessage = msg => {
   if (msg.type === 'stack-layers') {
-    X_OFFSET = msg.xOffset || 50;
-    Y_OFFSET = msg.yOffset || 50;
+    const xOffset = typeof msg.xOffset === 'number' ? msg.xOffset : 0;
+    const yOffset = typeof msg.yOffset === 'number' ? msg.yOffset : 0;
     STACK_MODE = msg.stackMode || 'primary-on-top';
-    
+
     try {
-      stackLayers();
+      stackLayers(xOffset, yOffset);
     } catch (error) {
       // If there's an error, send it back to UI instead of closing
       figma.ui.postMessage({
@@ -34,7 +32,7 @@ figma.ui.onmessage = msg => {
   }
 };
 
-function stackLayers() {
+function stackLayers(xOffset: number, yOffset: number) {
   // Get current selection
   const selection = figma.currentPage.selection;
   
@@ -197,8 +195,8 @@ function stackLayers() {
     // Apply offsets based on the final z-order
     sortedLayersToStack.forEach((layer, index) => {
       const offsetMultiplier = sortedLayersToStack.length - index;
-      const newX = primaryX + (X_OFFSET * offsetMultiplier);
-      const newY = primaryY + (Y_OFFSET * offsetMultiplier);
+      const newX = primaryX + (xOffset * offsetMultiplier);
+      const newY = primaryY + (yOffset * offsetMultiplier);
       
       layer.x = newX;
       layer.y = newY;
@@ -220,8 +218,8 @@ function stackLayers() {
     // Apply offsets - now the first layer (bottom-most originally) gets largest offset
     sortedLayersToStack.forEach((layer, index) => {
       const offsetMultiplier = sortedLayersToStack.length - index;
-      const newX = primaryX + (X_OFFSET * offsetMultiplier);
-      const newY = primaryY + (Y_OFFSET * offsetMultiplier);
+      const newX = primaryX + (xOffset * offsetMultiplier);
+      const newY = primaryY + (yOffset * offsetMultiplier);
       
       layer.x = newX;
       layer.y = newY;
