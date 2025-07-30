@@ -1,17 +1,341 @@
-<h2>Shape Creator</h2>
-<p>Count: <input id="count" type="number" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
-<script>
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* CSS Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-shapes', count } }, '*')
-}
+    /* Import Inter font */
+    @import url('https://fonts.googleapis.com/css2?family:Inter:wght@450&display=swap');
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+    /* Base typography - applies to all text */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 450;
+      line-height: 16px;
+      letter-spacing: 0.055px;
+    }
 
-</script>
+    /* UI Structure */
+    .ui-body {
+      display: flex;
+      width: 240px;
+      flex-direction: column;
+      align-items: flex-start;
+      background: var(--figma-color-bg);
+    }
+
+    .inputs-wrapper {
+      display: flex;
+      padding: 12px;
+      flex-direction: column;
+      align-items: center;
+      align-self: stretch;
+      gap: 0; /* Rows are touching */
+      border-bottom: 1px solid var(--figma-color-border);
+    }
+
+    .actions-wrapper {
+      display: flex;
+      padding: 12px;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 12px;
+      align-self: stretch;
+    }
+
+    /* Input rows */
+    .input-row {
+      display: flex;
+      height: 32px;
+      justify-content: space-between;
+      align-items: center;
+      align-self: stretch;
+    }
+
+    .input-row.label-only {
+      padding-bottom: 8px; /* Space after "Offset Amount" label */
+    }
+
+    .input-row label {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Number input fields */
+    .input-field {
+      display: flex;
+      width: 88px;
+      height: 24px;
+      align-items: center;
+      border-radius: 5px;
+      background: var(--figma-color-bg-secondary);
+      border: 1px solid transparent;
+      transition: border-color 0.15s;
+      position: relative;
+    }
+
+    .input-field:hover {
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .input-field:focus-within {
+      border: 1px solid var(--figma-color-bg-brand);
+    }
+
+    .input-prefix {
+      display: flex;
+      width: 24px;
+      height: 24px;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      color: var(--figma-color-text-secondary);
+      pointer-events: none;
+    }
+
+    .input-field input {
+      display: flex;
+      height: 24px;
+      flex: 1 0 0;
+      border: none;
+      background: transparent;
+      color: var(--figma-color-text);
+      font: inherit;
+      outline: none;
+      padding: 0 8px 0 0;
+      text-align: left;
+    }
+
+    .input-field input::placeholder {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    /* Remove number input spinners */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    /* Segmented control */
+    .segmented-control {
+      display: flex;
+      width: 88px;
+      align-items: flex-start;
+      border-radius: 5px;
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .segmented-tab {
+      display: flex;
+      height: 24px;
+      justify-content: center;
+      align-items: center;
+      flex: 1 0 0;
+      border-radius: 5px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .segmented-tab input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .segmented-tab label {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+      z-index: 2;
+    }
+
+    .segmented-tab svg {
+      width: 24px;
+      height: 24px;
+      color: var(--figma-color-text-secondary);
+      transition: color 0.15s;
+    }
+
+    /* Active tab styling */
+    .segmented-tab input:checked ~ .tab-bg {
+      display: block;
+    }
+
+    .segmented-tab input:checked ~ label svg {
+      color: var(--figma-color-text);
+    }
+
+    .tab-bg {
+      display: none;
+      position: absolute;
+      inset: 0;
+      border-radius: 5px;
+      border: 1px solid var(--figma-color-border);
+      background: var(--figma-color-bg);
+      z-index: 1;
+    }
+
+    /* Focus states for segmented control */
+    .segmented-tab input:focus ~ .tab-bg {
+      border: 1px solid var(--figma-color-bg-brand);
+    }
+
+    /* Buttons */
+    .button {
+      display: flex;
+      height: 24px;
+      padding: 4px 8px;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      border-radius: 5px;
+      border: none;
+      font: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .button-primary {
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .button-primary:active {
+      background: var(--figma-color-bg-brand-pressed);
+    }
+
+    .button-primary:focus {
+      outline: 1px solid var(--figma-color-bg-brand);
+      outline-offset: 1px;
+    }
+
+    .button-secondary {
+      background: transparent;
+      border: 1px solid var(--figma-color-border);
+      color: var(--figma-color-text);
+    }
+
+    .button-secondary:active {
+      background: var(--figma-color-bg-pressed);
+    }
+
+    .button-secondary:focus {
+      border-color: var(--figma-color-bg-brand);
+    }
+  </style>
+</head>
+<body>
+  <div class="ui-body">
+    <div class="inputs-wrapper">
+      <div class="input-row label-only">
+        <label>Offset Amount</label>
+      </div>
+      
+      <div class="input-row">
+        <label>X</label>
+        <div class="input-field">
+          <span class="input-prefix">X</span>
+          <input type="number" id="x-offset" value="50" placeholder="0">
+        </div>
+      </div>
+      
+      <div class="input-row">
+        <label>Y</label>
+        <div class="input-field">
+          <span class="input-prefix">Y</span>
+          <input type="number" id="y-offset" value="50" placeholder="0">
+        </div>
+      </div>
+      
+      <div class="input-row">
+        <label>Canvas Stacking</label>
+        <div class="segmented-control">
+          <div class="segmented-tab">
+            <input type="radio" id="primary-top" name="stack-mode" value="primary-on-top" checked>
+            <div class="tab-bg"></div>
+            <label for="primary-top">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10.9707 4.45115C11.6041 4.07113 12.3959 4.07113 13.0293 4.45115L17.5146 7.14256C17.8157 7.32331 18 7.6488 18 7.99998C18 8.35113 17.8157 8.67669 17.5146 8.8574L15.6104 9.999L17.5146 11.1426C17.8157 11.3233 18 11.6488 18 12C18 12.3511 17.8157 12.6767 17.5146 12.8574L15.6104 13.999L17.5146 15.1426C17.8156 15.3233 18 15.6489 18 16C17.9998 16.351 17.8156 16.6767 17.5146 16.8574L13.0293 19.5488C12.396 19.9286 11.604 19.9286 10.9707 19.5488L6.48535 16.8574C6.18438 16.6767 6.00018 16.351 6 16C6 15.6489 6.18436 15.3233 6.48535 15.1426L8.38867 13.999L6.48535 12.8574C6.18427 12.6767 6.00005 12.3511 6 12C6 11.6488 6.18427 11.3233 6.48535 11.1426L8.38867 9.999L6.48535 8.8574C6.18427 8.67669 6.00005 8.35113 6 7.99998C6 7.6488 6.18427 7.32331 6.48535 7.14256L10.9707 4.45115ZM13.0293 15.5488C12.396 15.9288 11.604 15.9288 10.9707 15.5488L9.36035 14.583L7 16L11.4854 18.6914C11.7624 18.8575 12.1005 18.8785 12.3926 18.7539L12.5146 18.6914L17 16L14.6377 14.583L13.0293 15.5488ZM13.0293 11.5488C12.396 11.9288 11.604 11.9288 10.9707 11.5488L9.36035 10.583L7 12L10.1924 13.915L11.4854 14.6914C11.7625 14.8576 12.1004 14.8786 12.3926 14.7539L12.5146 14.6914L17 12L14.6377 10.583L13.0293 11.5488ZM12.5146 5.30857C12.198 5.11856 11.802 5.11856 11.4854 5.30857L7 7.99998L10.1924 9.91502L11.4854 10.6914C11.7625 10.8576 12.1004 10.8786 12.3926 10.7539L12.5146 10.6914L17 7.99998L12.5146 5.30857Z" fill="currentColor"/>
+                <path opacity="0.3" d="M7 7.99995L11.4855 5.30864C11.8022 5.11864 12.1978 5.11864 12.5145 5.30864L17 7.99995L12.5145 10.6912C12.1978 10.8813 11.8022 10.8813 11.4855 10.6912L7 7.99995Z" fill="currentColor"/>
+              </svg>
+            </label>
+          </div>
+          
+          <div class="segmented-tab">
+            <input type="radio" id="primary-bottom" name="stack-mode" value="primary-on-bottom">
+            <div class="tab-bg"></div>
+            <label for="primary-bottom">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10.9707 4.45115C11.6041 4.07113 12.3959 4.07113 13.0293 4.45115L17.5146 7.14256C17.8157 7.32331 18 7.6488 18 7.99998C18 8.35113 17.8157 8.67669 17.5146 8.8574L15.6104 9.999L17.5146 11.1426C17.8157 11.3233 18 11.6488 18 12C18 12.3511 17.8157 12.6767 17.5146 12.8574L15.6104 13.999L17.5146 15.1426C17.8156 15.3233 18 15.6489 18 16C17.9998 16.351 17.8156 16.6767 17.5146 16.8574L13.0293 19.5488C12.396 19.9286 11.604 19.9286 10.9707 19.5488L6.48535 16.8574C6.18438 16.6767 6.00018 16.351 6 16C6 15.6489 6.18436 15.3233 6.48535 15.1426L8.38867 13.999L6.48535 12.8574C6.18427 12.6767 6.00005 12.3511 6 12C6 11.6488 6.18427 11.3233 6.48535 11.1426L8.38867 9.999L6.48535 8.8574C6.18427 8.67669 6.00005 8.35113 6 7.99998C6 7.6488 6.18427 7.32331 6.48535 7.14256L10.9707 4.45115ZM13.0293 15.5488C12.396 15.9288 11.604 15.9288 10.9707 15.5488L9.36035 14.583L7 16L11.4854 18.6914C11.7624 18.8575 12.1005 18.8785 12.3926 18.7539L12.5146 18.6914L17 16L14.6377 14.583L13.0293 15.5488ZM13.0293 11.5488C12.396 11.9288 11.604 11.9288 10.9707 11.5488L9.36035 10.583L7 12L10.1924 13.915L11.4854 14.6914C11.7625 14.8576 12.1004 14.8786 12.3926 14.7539L12.5146 14.6914L17 12L14.6377 10.583L13.0293 11.5488ZM12.5146 5.30857C12.198 5.11856 11.802 5.11856 11.4854 5.30857L7 7.99998L10.1924 9.91502L11.4854 10.6914C11.7625 10.8576 12.1004 10.8786 12.3926 10.7539L12.5146 10.6914L17 7.99998L12.5146 5.30857Z" fill="currentColor"/>
+                <path opacity="0.3" d="M17 16L12.5146 18.6914C12.198 18.8814 11.802 18.8814 11.4854 18.6914L7 16L9.36035 14.583L10.9707 15.5488C11.6041 15.9288 12.3959 15.9288 13.0293 15.5488L14.6387 14.583L17 16Z" fill="currentColor"/>
+              </svg>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="actions-wrapper">
+      <button class="button button-secondary" id="cancel-button">Cancel</button>
+      <button class="button button-primary" id="stack-button">Make Stack</button>
+    </div>
+  </div>
+  
+  <script>
+    // Button handlers
+    document.getElementById('stack-button').addEventListener('click', () => {
+      const xOffset = parseInt(document.getElementById('x-offset').value) || 0;
+      const yOffset = parseInt(document.getElementById('y-offset').value) || 0;
+      const stackMode = document.querySelector('input[name="stack-mode"]:checked').value;
+      
+      parent.postMessage({
+        pluginMessage: {
+          type: 'stack-layers',
+          xOffset: xOffset,
+          yOffset: yOffset,
+          stackMode: stackMode
+        }
+      }, '*');
+    });
+    
+    document.getElementById('cancel-button').addEventListener('click', () => {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'cancel'
+        }
+      }, '*');
+    });
+    
+    // Handle error messages
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (msg && msg.type === 'error') {
+        // Plugin stays open on error
+        console.error('Error:', msg.message);
+      }
+    };
+    
+    // Allow Enter key to submit
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        document.getElementById('stack-button').click();
+      }
+    });
+  </script>
+</body>
+</html>
