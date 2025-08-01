@@ -1,16 +1,79 @@
 // Layer Stacker Figma Plugin
 // Stacks selected layers with incremental offsets
-
-// UI IMPLEMENTATION
-// Note: __html__ should be defined in your ui.html file
-figma.showUI(__html__, { 
-  width: 240, 
-  height: 168,
-  themeColors: true // Enable automatic theme support
-});
+// Now supports both UI mode and parameter mode for quick actions
 
 // Default values
 let STACK_MODE: 'primary-on-top' | 'primary-on-bottom' = 'primary-on-top';
+
+// Handle parameter suggestions (required for non-freeform parameters)
+figma.parameters.on('input', ({ parameters, key, query, result }) => {
+  switch (key) {
+    case 'xOffset':
+      const xOffsetOptions = ['0', '8', '16', '24', '32', '48'];
+      result.setSuggestions(
+        xOffsetOptions
+          .filter(option => option.includes(query))
+          .map(option => ({
+            name: option,
+            data: option
+          }))
+      );
+      break;
+      
+    case 'yOffset':
+      const yOffsetOptions = ['0', '8', '16', '24', '32', '48'];
+      result.setSuggestions(
+        yOffsetOptions
+          .filter(option => option.includes(query))
+          .map(option => ({
+            name: option,
+            data: option
+          }))
+      );
+      break;
+      
+    case 'stackMode':
+      const stackModeOptions = [
+        { name: 'Primary on top', data: 'primary-on-top' },
+        { name: 'Primary on bottom', data: 'primary-on-bottom' }
+      ];
+      result.setSuggestions(
+        stackModeOptions.filter(option => 
+          option.name.toLowerCase().includes(query.toLowerCase())
+        )
+      );
+      break;
+      
+    default:
+      return;
+  }
+});
+
+// Handle plugin execution via the 'run' event (works for both parameter and UI modes)
+figma.on('run', ({ command, parameters }: RunEvent) => {
+  if (parameters) {
+    // Plugin was run with parameters from quick actions
+    const xOffset = parseInt(parameters.xOffset) || 0;
+    const yOffset = parseInt(parameters.yOffset) || 0;
+    // For stackMode, we use the data value from suggestions
+    const stackMode = (parameters.stackMode as 'primary-on-top' | 'primary-on-bottom') || 'primary-on-top';
+    
+    STACK_MODE = stackMode;
+    
+    try {
+      stackLayers(xOffset, yOffset);
+    } catch (error) {
+      figma.closePlugin(`❌ ${error instanceof Error ? error.message : 'An error occurred while stacking layers'}`);
+    }
+  } else {
+    // No parameters - show UI for manual input
+    figma.showUI(__html__, { 
+      width: 240, 
+      height: 168,
+      themeColors: true // Enable automatic theme support
+    });
+  }
+});
 
 figma.ui.onmessage = msg => {
   if (msg.type === 'stack-layers') {
@@ -225,11 +288,12 @@ function stackLayers(xOffset: number, yOffset: number) {
       layer.y = newY;
     });
   }
-  
+
   // Success message
-  const totalStacked = layersToStack.length;
+//const totalStacked = layersToStack.length;
+  const totalStacked = selection.length
   const primaryLayerName = primaryLayer.name || "Unnamed Layer";
   const modeText = STACK_MODE === 'primary-on-top' ? 'on top' : 'on bottom';
   
-  figma.closePlugin(`✅ Stacked ${totalStacked} layer${totalStacked > 1 ? 's' : ''} with "${primaryLayerName}" ${modeText}`);
+  figma.closePlugin(`Stacked ${totalStacked} layers with "${primaryLayerName}" ${modeText}`);
 }

@@ -16,5 +16,25 @@
     "allowedDomains": [
       "none"
     ]
-  }
+  },
+  "parameters": [
+    {
+      "name": "X offset",
+      "key": "xOffset",
+      "description": "Enter horizontal spacing between stacked layers (in pixels)",
+      "allowFreeform": true
+    },
+    {
+      "name": "Y offset",
+      "key": "yOffset",
+      "description": "Enter vertical spacing between stacked layers (in pixels)",
+      "allowFreeform": true
+    },
+    {
+      "name": "Stacking order",
+      "description": "Which order should selected layers stack?",
+      "key": "stackMode"
+    }
+  ],
+  "parameterOnly": false
 }
