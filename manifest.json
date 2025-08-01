@@ -21,19 +21,17 @@
     {
       "name": "X offset",
       "key": "xOffset",
-      "description": "Enter horizontal spacing between stacked layers (in pixels)",
-      "allowFreeform": true
+      "description": "Enter horizontal spacing between stacked layers (in pixels)"
     },
     {
       "name": "Y offset",
       "key": "yOffset",
-      "description": "Enter vertical spacing between stacked layers (in pixels)",
-      "allowFreeform": true
+      "description": "Enter vertical spacing between stacked layers (in pixels)"
     },
     {
       "name": "Stacking order",
-      "description": "Which order should selected layers stack?",
-      "key": "stackMode"
+      "key": "stackMode",
+      "description": "Which order should selected layers stack?"
     }
   ],
   "parameterOnly": false

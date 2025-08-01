@@ -5,31 +5,31 @@
 // Default values
 let STACK_MODE: 'primary-on-top' | 'primary-on-bottom' = 'primary-on-top';
 
+// Check that the input is a valid number (based on Figma's official plugin samples)
+function setSuggestionsForNumberInput(query: string, result: any, completions?: string[]) {
+  if (query === '') {
+    result.setSuggestions(completions ?? [])
+  } else if (!Number.isFinite(Number(query))) {
+    result.setError("Please enter a numeric value")
+  } else if (Number(query) < 0) {
+    result.setError("Must be 0 or greater")
+  } else {
+    const filteredCompletions = completions ? completions.filter(s => s.includes(query) && s !== query) : []
+    result.setSuggestions([query, ...filteredCompletions])
+  }
+}
+
 // Handle parameter suggestions (required for non-freeform parameters)
 figma.parameters.on('input', ({ parameters, key, query, result }) => {
   switch (key) {
     case 'xOffset':
       const xOffsetOptions = ['0', '8', '16', '24', '32', '48'];
-      result.setSuggestions(
-        xOffsetOptions
-          .filter(option => option.includes(query))
-          .map(option => ({
-            name: option,
-            data: option
-          }))
-      );
+      setSuggestionsForNumberInput(query, result, xOffsetOptions);
       break;
       
     case 'yOffset':
       const yOffsetOptions = ['0', '8', '16', '24', '32', '48'];
-      result.setSuggestions(
-        yOffsetOptions
-          .filter(option => option.includes(query))
-          .map(option => ({
-            name: option,
-            data: option
-          }))
-      );
+      setSuggestionsForNumberInput(query, result, yOffsetOptions);
       break;
       
     case 'stackMode':
