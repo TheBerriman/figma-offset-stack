@@ -6,8 +6,8 @@
     * {
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
     }
+    
 
     /* Import Inter font */
     @import url('https://fonts.googleapis.com/css2?family:Inter:wght@450&display=swap');
@@ -28,7 +28,7 @@
         padding: 0;
         overflow: hidden;
         width: 240px;
-        height: 156px;
+        height: 168px;
     }
 
     .ui-body {
@@ -38,6 +38,7 @@
         flex-direction: column;
         align-items: flex-start;
         background: var(--figma-color-bg);
+        justify-content: space-between;
     }
 
     .inputs-wrapper {
@@ -54,6 +55,7 @@
       display: flex;
       padding: 12px;
       justify-content: flex-end;
+      flex-shrink: 0;
       align-items: center;
       gap: 12px;
       align-self: stretch;
@@ -216,6 +218,8 @@
       cursor: pointer;
       transition: all 0.15s;
       text-align: center;
+      outline: none;
+      flex-shrink: 0;
     }
 
     .button-primary {
@@ -229,7 +233,8 @@
 
     .button:focus {
         outline: none;
-        box-shadow: 0 0 0 1px var(--figma-color-border-selected);
+        outline-offset: -1px;
+        box-shadow: 0 0 0 1px var(--figma-color-border-selected), inset 0 0 0 1px var(--figma-color-bg);
     }
 
     .button-secondary {
@@ -243,9 +248,10 @@
     }
 
     .button-secondary:focus {
+        outline-offset: 0px;
         box-shadow: 0 0 0 1px var(--figma-color-border-selected);
-        border-color: var(--figma-color-border-selected);
     }
+
   </style>
 </head>
 <body>
