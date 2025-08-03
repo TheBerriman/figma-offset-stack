@@ -267,15 +267,16 @@ function stackLayers(xOffset: number, yOffset: number) {
   } else {
     // Primary-on-bottom mode
     // First, move primary to the bottom
-    targetParent.insertChild(0, primaryLayer);
     
     // Insert layers in forward order above the primary
     // This maintains their relative order, just flipped
     for (let i = 0; i < sortedLayersToStack.length; i++) {
       const layer = sortedLayersToStack[i];
       
+      // Always get fresh index of primary since it might have moved
+      primaryIndex = targetParent.children.indexOf(primaryLayer);
       // Always insert at position 1 (just above primary which is at 0)
-      targetParent.insertChild(1, layer);
+      targetParent.insertChild(primaryIndex + 1, layer);
     }
     
     // Apply offsets - now the first layer (bottom-most originally) gets largest offset
@@ -290,7 +291,6 @@ function stackLayers(xOffset: number, yOffset: number) {
   }
 
   // Success message
-//const totalStacked = layersToStack.length;
   const totalStacked = selection.length
   const primaryLayerName = primaryLayer.name || "Unnamed Layer";
   const modeText = STACK_MODE === 'primary-on-top' ? 'on top' : 'on bottom';
