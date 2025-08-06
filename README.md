@@ -1,40 +1,22 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Offset Stack
+*Plugins > Design tools > File organization*
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+`arrange` `layers` `move` `nudge` `offset` `space`
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Tagline
+> Incrementally stack layers using X and Y offset values
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+## Description
+**🥞 Incrementally stack layers using X and Y offset values**
 
-  https://nodejs.org/en/download/
+Offset Stack does exactly what it says on the box; a plugin that automatically positions layers into incrementally offset stacks, getting around auto-layout’s limitation on uniform spacing.
 
-Next, install TypeScript using the command:
+#### How it works
+1. Select layers and run plugin directly or by hitting TAB with it highlighted in the Actions… menu
+2. Enter the amount of X/Y space (+/-) to offset each layer by
+3. Choose which direction to order the layers
+4. Run it and admire your fresh new stack
 
-  npm install -g typescript
+## License
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
-
-  npm install --save-dev @figma/plugin-typings
-
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
-
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
-
-For more information, visit https://www.typescriptlang.org/
-
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
-
-We recommend writing TypeScript code using Visual Studio code:
-
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
-
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+[MIT](/LICENSE.md)

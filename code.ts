@@ -1,9 +1,163 @@
 // Layer Stacker Figma Plugin
-// Stacks selected layers with incremental offsets
-// Now supports both UI mode and parameter mode for quick actions
 
 // Default values
 let STACK_MODE: 'primary-on-top' | 'primary-on-bottom' = 'primary-on-top';
+
+// Z-order utilities - extracted for reusability and performance
+namespace ZOrderUtils {
+  interface AncestorPath {
+    path: SceneNode[];
+    depth: number;
+  }
+
+  // Cache ancestor paths to avoid recalculating for the same nodes
+  const ancestorPathCache = new WeakMap<SceneNode, AncestorPath>();
+
+  function getAncestorPath(node: SceneNode): AncestorPath {
+    if (ancestorPathCache.has(node)) {
+      return ancestorPathCache.get(node)!;
+    }
+
+    const path: SceneNode[] = [];
+    let current: SceneNode = node;
+    let depth = 0;
+    
+    while (current.parent) {
+      path.unshift(current);
+      depth++;
+      const parent = current.parent;
+      
+      if (parent.type === 'PAGE') {
+        break;
+      }
+      
+      current = parent as SceneNode;
+    }
+    
+    const result: AncestorPath = { path, depth };
+    ancestorPathCache.set(node, result);
+    return result;
+  }
+
+  export function compareZOrder(layer1: SceneNode, layer2: SceneNode): number {
+    // Same parent - direct comparison
+    if (layer1.parent && layer2.parent && layer1.parent === layer2.parent) {
+      const index1 = layer1.parent.children.indexOf(layer1);
+      const index2 = layer2.parent.children.indexOf(layer2);
+      return index1 - index2; // Lower index = lower in stack
+    }
+    
+    // Cross-parent comparison
+    const ancestorPath1 = getAncestorPath(layer1);
+    const ancestorPath2 = getAncestorPath(layer2);
+    
+    // Find common ancestor level
+    let commonLevel = 0;
+    const maxLevel = Math.min(ancestorPath1.path.length, ancestorPath2.path.length);
+    
+    while (commonLevel < maxLevel && 
+           ancestorPath1.path[commonLevel].parent === ancestorPath2.path[commonLevel].parent) {
+      commonLevel++;
+    }
+    
+    if (commonLevel === 0) {
+      return 0; // No common parent, maintain order
+    }
+    
+    // Compare at the common ancestor level
+    const ancestor1 = ancestorPath1.path[commonLevel - 1];
+    const ancestor2 = ancestorPath2.path[commonLevel - 1];
+    
+    if (ancestor1.parent && ancestor2.parent && ancestor1.parent === ancestor2.parent) {
+      const index1 = ancestor1.parent.children.indexOf(ancestor1);
+      const index2 = ancestor2.parent.children.indexOf(ancestor2);
+      return index1 - index2;
+    }
+    
+    return 0;
+  }
+
+  export function getTopmostLayer(layers: readonly SceneNode[]): SceneNode {
+    return layers.reduce((topmost, current) => {
+      const comparison = compareZOrder(topmost, current);
+      // If comparison < 0, current has higher index (more on top), so choose current
+      // If comparison >= 0, topmost has higher or equal index, so keep topmost
+      return comparison < 0 ? current : topmost;
+    });
+  }
+
+  export function sortLayersByZOrder(layers: SceneNode[]): SceneNode[] {
+    return [...layers].sort(compareZOrder);
+  }
+
+  // WeakMap automatically clears when nodes are garbage collected
+  // No manual cleanup needed
+}
+
+// Layer positioning utilities
+namespace PositionUtils {
+  export function calculateOffsetPositions(
+    layers: SceneNode[], 
+    primaryX: number, 
+    primaryY: number, 
+    xOffset: number, 
+    yOffset: number
+  ): Array<{layer: SceneNode, x: number, y: number}> {
+    return layers.map((layer, index) => {
+      const offsetMultiplier = layers.length - index;
+      const newX = primaryX + (xOffset * offsetMultiplier);
+      const newY = primaryY + (yOffset * offsetMultiplier);
+      return { layer, x: newX, y: newY };
+    });
+  }
+
+  export function applyPositions(positions: Array<{layer: SceneNode, x: number, y: number}>): void {
+    positions.forEach(({ layer, x, y }) => {
+      layer.x = x;
+      layer.y = y;
+    });
+  }
+}
+
+// Layer reordering utilities - optimized for performance
+namespace ReorderUtils {
+  export function reorderLayers(
+    layersToStack: SceneNode[], 
+    primaryLayer: SceneNode, 
+    targetParent: SceneNode & ChildrenMixin,
+    stackMode: 'primary-on-top' | 'primary-on-bottom'
+  ): void {
+    if (stackMode === 'primary-on-top') {
+      reorderPrimaryOnTop(layersToStack, primaryLayer, targetParent);
+    } else {
+      reorderPrimaryOnBottom(layersToStack, primaryLayer, targetParent);
+    }
+  }
+
+  function reorderPrimaryOnTop(
+    layersToStack: SceneNode[], 
+    primaryLayer: SceneNode, 
+    targetParent: SceneNode & ChildrenMixin
+  ): void {
+    for (let i = 0; i < layersToStack.length; i++) {
+      const layer = layersToStack[i];
+      const primaryIndex = targetParent.children.indexOf(primaryLayer);
+      targetParent.insertChild(primaryIndex, layer);
+    }
+  }
+
+  function reorderPrimaryOnBottom(
+    layersToStack: SceneNode[], 
+    primaryLayer: SceneNode, 
+    targetParent: SceneNode & ChildrenMixin
+  ): void {
+    for (let i = 0; i < layersToStack.length; i++) {
+      const layer = layersToStack[i];
+      const primaryIndex = targetParent.children.indexOf(primaryLayer);
+      targetParent.insertChild(primaryIndex + 1, layer);
+    }
+  }
+}
 
 // Check that the input is a valid number (based on Figma's official plugin samples)
 function setSuggestionsForNumberInput(query: string, result: any, completions?: string[]) {
@@ -11,8 +165,6 @@ function setSuggestionsForNumberInput(query: string, result: any, completions?: 
     result.setSuggestions(completions ?? [])
   } else if (!Number.isFinite(Number(query))) {
     result.setError("Please enter a numeric value")
-  } else if (Number(query) < 0) {
-    result.setError("Must be 0 or greater")
   } else {
     const filteredCompletions = completions ? completions.filter(s => s.includes(query) && s !== query) : []
     result.setSuggestions([query, ...filteredCompletions])
@@ -23,19 +175,19 @@ function setSuggestionsForNumberInput(query: string, result: any, completions?: 
 figma.parameters.on('input', ({ parameters, key, query, result }) => {
   switch (key) {
     case 'xOffset':
-      const xOffsetOptions = ['0', '8', '16', '24', '32', '48'];
+      const xOffsetOptions = ['-24', '-16', '-8', '0', '8', '16', '24'];
       setSuggestionsForNumberInput(query, result, xOffsetOptions);
       break;
       
     case 'yOffset':
-      const yOffsetOptions = ['0', '8', '16', '24', '32', '48'];
+      const yOffsetOptions = ['-24', '-16', '-8', '0', '8', '16', '24'];
       setSuggestionsForNumberInput(query, result, yOffsetOptions);
       break;
       
     case 'stackMode':
       const stackModeOptions = [
-        { name: 'Primary on top', data: 'primary-on-top' },
-        { name: 'Primary on bottom', data: 'primary-on-bottom' }
+        { name: 'First on top', data: 'primary-on-top' },
+        { name: 'Last on top', data: 'primary-on-bottom' }
       ];
       result.setSuggestions(
         stackModeOptions.filter(option => 
@@ -55,7 +207,6 @@ figma.on('run', ({ command, parameters }: RunEvent) => {
     // Plugin was run with parameters from quick actions
     const xOffset = parseInt(parameters.xOffset) || 0;
     const yOffset = parseInt(parameters.yOffset) || 0;
-    // For stackMode, we use the data value from suggestions
     const stackMode = (parameters.stackMode as 'primary-on-top' | 'primary-on-bottom') || 'primary-on-top';
     
     STACK_MODE = stackMode;
@@ -95,205 +246,73 @@ figma.ui.onmessage = msg => {
   }
 };
 
+function validateSelection(selection: readonly SceneNode[]): void {
+  if (selection.length < 2) {
+    throw new Error("Please select at least 2 layers to stack");
+  }
+}
+
+function validatePrimaryLayer(primaryLayer: SceneNode): SceneNode & ChildrenMixin {
+  const targetParent = primaryLayer.parent;
+  
+  if (!targetParent) {
+    throw new Error("Primary layer has no parent - cannot proceed");
+  }
+  
+  // Type guard to ensure parent has children mixin
+  if (!('children' in targetParent)) {
+    throw new Error("Primary layer's parent cannot contain children - cannot proceed");
+  }
+  
+  return targetParent as SceneNode & ChildrenMixin;
+}
+
 function stackLayers(xOffset: number, yOffset: number) {
   // Get current selection
   const selection = figma.currentPage.selection;
   
-  // Check if we have enough layers to stack
-  if (selection.length < 2) {
-    figma.closePlugin("❌ Please select at least 2 layers to stack");
-    return;
-  }
+  // Validate selection
+  validateSelection(selection);
   
-  // Find the topmost layer (highest z-index) to use as primary layer
-  // This handles cross-parent comparisons by finding common ancestors
-  function getTopmostLayer(layers: readonly SceneNode[]): SceneNode {
-    function compareZOrder(layer1: SceneNode, layer2: SceneNode): SceneNode {
-      // If same parent, compare directly
-      if (layer1.parent && layer2.parent && layer1.parent === layer2.parent) {
-        const index1 = layer1.parent.children.indexOf(layer1);
-        const index2 = layer2.parent.children.indexOf(layer2);
-        return index2 > index1 ? layer2 : layer1;
-      }
-      
-      // Find common ancestor and compare the ancestor branches
-      function findAncestorPath(node: SceneNode): SceneNode[] {
-        const path: SceneNode[] = [];
-        let current: SceneNode = node;
-        
-        while (current.parent) {
-          path.unshift(current);
-          const parent = current.parent;
-          
-          // Stop if we reach the page level (parent will be PageNode)
-          if (parent.type === 'PAGE') {
-            break;
-          }
-          
-          // Continue up the tree - parent must be a SceneNode at this point
-          current = parent as SceneNode;
-        }
-        
-        return path;
-      }
-      
-      const path1 = findAncestorPath(layer1);
-      const path2 = findAncestorPath(layer2);
-      
-      // Find the common ancestor level
-      let commonLevel = 0;
-      while (commonLevel < path1.length && commonLevel < path2.length && 
-             path1[commonLevel].parent === path2[commonLevel].parent) {
-        commonLevel++;
-      }
-      
-      if (commonLevel === 0) {
-        return layer1; // No common parent, keep first
-      }
-      
-      // Compare at the common ancestor level
-      const ancestor1 = path1[commonLevel - 1];
-      const ancestor2 = path2[commonLevel - 1];
-      
-      if (ancestor1.parent && ancestor2.parent && ancestor1.parent === ancestor2.parent) {
-        const index1 = ancestor1.parent.children.indexOf(ancestor1);
-        const index2 = ancestor2.parent.children.indexOf(ancestor2);
-        const winner = index2 > index1 ? layer2 : layer1;
-        return winner;
-      }
-      
-      return layer1;
-    }
-    
-    return layers.reduce((topmost, current) => {
-      const result = compareZOrder(topmost, current);
-      return result;
-    });
-  }
-  
-  const primaryLayer = getTopmostLayer(selection);
+  // Find the topmost layer to use as primary layer
+  const primaryLayer = ZOrderUtils.getTopmostLayer(selection);
   const layersToStack = selection.filter(layer => layer !== primaryLayer);
   
-  // Get primary layer's parent and position
-  const targetParent = primaryLayer.parent;
+  // Validate primary layer and get target parent
+  const targetParent = validatePrimaryLayer(primaryLayer);
+  
+  // Get primary layer's position for offset calculations
   const primaryX = primaryLayer.x;
   const primaryY = primaryLayer.y;
   
-  if (!targetParent) {
-    figma.closePlugin("❌ Primary layer has no parent - cannot proceed");
-    return;
-  }
+  // Sort layers to stack by their global z-order
+  const sortedLayersToStack = ZOrderUtils.sortLayersByZOrder(layersToStack);
   
-  // Sort ALL layers by their global z-order
-  // For cross-parent comparisons, we use the same logic as getTopmostLayer
-  function sortLayersByGlobalZOrder(layers: SceneNode[]): SceneNode[] {
-    return [...layers].sort((a, b) => {
-      // If same parent, compare directly
-      if (a.parent && b.parent && a.parent === b.parent) {
-        const indexA = a.parent.children.indexOf(a);
-        const indexB = b.parent.children.indexOf(b);
-        return indexA - indexB; // Lower index = lower in stack
-      }
-      
-      // For cross-parent, we need to compare their global z-order
-      // Using similar logic to getTopmostLayer's compareZOrder
-      function findAncestorPath(node: SceneNode): SceneNode[] {
-        const path: SceneNode[] = [];
-        let current: SceneNode = node;
-        
-        while (current.parent) {
-          path.unshift(current);
-          const parent = current.parent;
-          if (parent.type === 'PAGE') break;
-          current = parent as SceneNode;
-        }
-        
-        return path;
-      }
-      
-      const pathA = findAncestorPath(a);
-      const pathB = findAncestorPath(b);
-      
-      // Find common ancestor level
-      let commonLevel = 0;
-      while (commonLevel < pathA.length && commonLevel < pathB.length && 
-             pathA[commonLevel].parent === pathB[commonLevel].parent) {
-        commonLevel++;
-      }
-      
-      if (commonLevel === 0) return 0; // No common parent, maintain order
-      
-      // Compare at the common ancestor level
-      const ancestorA = pathA[commonLevel - 1];
-      const ancestorB = pathB[commonLevel - 1];
-      
-      if (ancestorA.parent && ancestorB.parent && ancestorA.parent === ancestorB.parent) {
-        const indexA = ancestorA.parent.children.indexOf(ancestorA);
-        const indexB = ancestorB.parent.children.indexOf(ancestorB);
-        return indexA - indexB;
-      }
-      
-      return 0;
-    });
-  }
+  // Reorder layers in the hierarchy
+  ReorderUtils.reorderLayers(sortedLayersToStack, primaryLayer, targetParent, STACK_MODE);
   
-  // Sort all layers to stack by their global z-order
-  const sortedLayersToStack = sortLayersByGlobalZOrder(layersToStack);
-
-  // Get the primary layer's current index
-  let primaryIndex = targetParent.children.indexOf(primaryLayer);
-  
-  if (STACK_MODE === 'primary-on-top') {
-    // Original behavior: insert in forward order
-    for (let i = 0; i < sortedLayersToStack.length; i++) {
-      const layer = sortedLayersToStack[i];
-      
-      // Always get fresh index of primary since it might have moved
-      primaryIndex = targetParent.children.indexOf(primaryLayer);
-      
-      // Insert just below the primary
-      targetParent.insertChild(primaryIndex, layer);
-    }
-    
-    // Apply offsets based on the final z-order
-    sortedLayersToStack.forEach((layer, index) => {
-      const offsetMultiplier = sortedLayersToStack.length - index;
-      const newX = primaryX + (xOffset * offsetMultiplier);
-      const newY = primaryY + (yOffset * offsetMultiplier);
-      
-      layer.x = newX;
-      layer.y = newY;
-    });
-  } else {
-    // Primary-on-bottom mode
-    // First, move primary to the bottom
-    
-    // Insert layers in forward order above the primary
-    // This maintains their relative order, just flipped
-    for (let i = 0; i < sortedLayersToStack.length; i++) {
-      const layer = sortedLayersToStack[i];
-      
-      // Always get fresh index of primary since it might have moved
-      primaryIndex = targetParent.children.indexOf(primaryLayer);
-      // Always insert at position 1 (just above primary which is at 0)
-      targetParent.insertChild(primaryIndex + 1, layer);
-    }
-    
-    // Apply offsets - now the first layer (bottom-most originally) gets largest offset
-    sortedLayersToStack.forEach((layer, index) => {
-      const offsetMultiplier = sortedLayersToStack.length - index;
-      const newX = primaryX + (xOffset * offsetMultiplier);
-      const newY = primaryY + (yOffset * offsetMultiplier);
-      
-      layer.x = newX;
-      layer.y = newY;
-    });
-  }
+  // Calculate and apply new positions
+  const newPositions = PositionUtils.calculateOffsetPositions(
+    sortedLayersToStack, 
+    primaryX, 
+    primaryY, 
+    xOffset, 
+    yOffset
+  );
+  PositionUtils.applyPositions(newPositions);
 
   // Success message
-  const totalStacked = selection.length
-  const primaryLayerName = primaryLayer.name || "Unnamed Layer";
-  const modeText = STACK_MODE === 'primary-on-top' ? 'on top' : 'on bottom';
+  const totalStacked = selection.length;
+  let topLayerName: string;
   
-  figma.closePlugin(`Stacked ${totalStacked} layers with "${primaryLayerName}" ${modeText}`);
+  if (STACK_MODE === 'primary-on-top') {
+    // Primary layer is on top
+    topLayerName = primaryLayer.name || "Unnamed Layer";
+  } else {
+    // First layer in the sorted array ends up on top due to insertion order
+    const topLayer = sortedLayersToStack[0];
+    topLayerName = topLayer.name || "Unnamed Layer";
+  }
+  
+  figma.closePlugin(`Stacked ${totalStacked} layers with "${topLayerName}" on top`);
 }
